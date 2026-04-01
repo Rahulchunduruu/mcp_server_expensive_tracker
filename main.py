@@ -2,6 +2,11 @@ from fastmcp import FastMCP
 import os
 import sqlite3
 
+if os.path.exists('/data/expenses.db'):
+    pass
+else:
+    os.makedirs('/data', exist_ok=True)
+
 DB_PATH = os.environ.get("EXPENSE_DB_PATH", "/data/expenses.db")
 CATEGORIES_PATH = os.path.join(os.path.dirname(__file__), "categories.json")
 
