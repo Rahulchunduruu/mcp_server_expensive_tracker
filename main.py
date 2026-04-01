@@ -2,9 +2,14 @@ from fastmcp import FastMCP
 import os
 import libsql_client
 
-# ── Turso config (set these as env vars in Prefect) ──
-TURSO_URL   = os.environ["TURSO_DB_URL"]      # libsql://your-db.turso.io
-TURSO_TOKEN = os.environ["TURSO_AUTH_TOKEN"]  # your token
+TURSO_URL   = os.environ.get("TURSO_DB_URL", "")
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
+
+if not TURSO_URL or not TURSO_TOKEN:
+    raise RuntimeError("TURSO_DB_URL and TURSO_AUTH_TOKEN env vars not set!")
+
+
+
 
 mcp = FastMCP("ExpenseTracker")
 
