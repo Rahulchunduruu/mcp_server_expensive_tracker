@@ -1,9 +1,7 @@
 [project]
-name = "expensive-tracker-remote-server"
+name = "expense-tracker"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=3.2.0",
+    "fastmcp",
+    "requests",
 ]

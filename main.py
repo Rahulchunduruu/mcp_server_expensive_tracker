@@ -1,29 +1,37 @@
 from fastmcp import FastMCP
 import os
-import libsql_client
+import requests
 
-TURSO_URL   = os.environ.get("TURSO_DB_URL", "")
+TURSO_URL   = os.environ.get("TURSO_DB_URL", "")      # https://your-db.turso.io
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
-
-if not TURSO_URL or not TURSO_TOKEN:
-    raise RuntimeError("TURSO_DB_URL and TURSO_AUTH_TOKEN env vars not set!")
-
-
-
 
 mcp = FastMCP("ExpenseTracker")
 
-# ── Helper: run any query ──────────────────────────────
+# ── Helper: execute SQL via Turso HTTP API ─────────────
 def query(sql, params=None):
-    with libsql_client.create_client_sync(
-        url=TURSO_URL,
-        auth_token=TURSO_TOKEN
-    ) as client:
-        if params:
-            return client.execute(sql, params)
-        return client.execute(sql)
+    response = requests.post(
+        f"{TURSO_URL}/v2/pipeline",
+        headers={
+            "Authorization": f"Bearer {TURSO_TOKEN}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "requests": [
+                {
+                    "type": "execute",
+                    "stmt": {
+                        "sql": sql,
+                        "args": [{"type": "text", "value": str(p)} for p in (params or [])]
+                    }
+                },
+                {"type": "close"}
+            ]
+        }
+    )
+    response.raise_for_status()
+    return response.json()["results"][0]["response"]["result"]
 
-# ── Init table on startup ──────────────────────────────
+# ── Init table ─────────────────────────────────────────
 def init_db():
     query("""
         CREATE TABLE IF NOT EXISTS expenses(
@@ -47,22 +55,17 @@ def add_expense(date, amount, category, subcategory="", note=""):
         "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
         [date, amount, category, subcategory, note]
     )
-    return {"status": "ok", "id": result.last_insert_rowid}
+    return {"status": "ok", "id": result["last_insert_rowid"]}
 
 @mcp.tool()
 def list_expenses(start_date, end_date):
     '''List expense entries within an inclusive date range.'''
     result = query(
-        """
-        SELECT id, date, amount, category, subcategory, note
-        FROM expenses
-        WHERE date BETWEEN ? AND ?
-        ORDER BY id ASC
-        """,
+        "SELECT id, date, amount, category, subcategory, note FROM expenses WHERE date BETWEEN ? AND ? ORDER BY id ASC",
         [start_date, end_date]
     )
-    cols = result.columns
-    data = [dict(zip(cols, row)) for row in result.rows]
+    cols = [c["name"] for c in result["cols"]]
+    data = [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
     return {"instruction": system_prompt(str(data)), "raw_data": data}
 
 @mcp.tool()
@@ -72,33 +75,25 @@ def list_expenses_by_column_name(column_name, item):
     if column_name not in allowed:
         return {"error": f"Invalid column: {column_name}"}
     result = query(
-        f"""
-        SELECT id, date, amount, subcategory, note, category
-        FROM expenses
-        WHERE {column_name} = ?
-        """,
+        f"SELECT id, date, amount, subcategory, note, category FROM expenses WHERE {column_name} = ?",
         [item]
     )
-    cols = result.columns
-    data = [dict(zip(cols, row)) for row in result.rows]
+    cols = [c["name"] for c in result["cols"]]
+    data = [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
     return {"instruction": system_prompt(str(data)), "raw_data": data}
 
 @mcp.tool()
 def summarize(start_date, end_date, category=None):
     '''Summarize expenses by category within a date range.'''
-    sql = """
-        SELECT category, SUM(amount) AS total_amount
-        FROM expenses
-        WHERE date BETWEEN ? AND ?
-    """
+    sql = "SELECT category, SUM(amount) AS total_amount FROM expenses WHERE date BETWEEN ? AND ?"
     params = [start_date, end_date]
     if category:
         sql += " AND category = ?"
         params.append(category)
     sql += " GROUP BY category ORDER BY category ASC"
     result = query(sql, params)
-    cols = result.columns
-    return [dict(zip(cols, row)) for row in result.rows]
+    cols = [c["name"] for c in result["cols"]]
+    return [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
 
 @mcp.tool()
 def delete_expense(expense_id):
