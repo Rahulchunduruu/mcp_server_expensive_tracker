@@ -48,6 +48,24 @@ init_db()
 
 # ── Tools ──────────────────────────────────────────────
 
+# ✅ Plain helper function — no decorator
+def build_prompt(problem: str):
+    return f"""
+        You are an expert financial data analyst.
+        Solve the problem step by step:
+        {problem}
+        Give:
+        1. A clear and concise explanation of spending till now
+        2. If you find any duplicated transaction, highlight it bold and give the id
+        3. If you find any transaction with missing category, highlight it bold
+        4. Show the data in red colour where amount is greater than 10000
+        5. Show the data in a basic tabular format.
+    """
+
+@mcp.prompt()
+def system_prompt(problem: str):
+    return build_prompt(problem)
+
 @mcp.tool()
 def add_expense(date, amount, category, subcategory="", note=""):
     '''Add a new expense entry to the database.'''
@@ -66,7 +84,9 @@ def list_expenses(start_date, end_date):
     )
     cols = [c["name"] for c in result["cols"]]
     data = [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
-    return {"instruction": system_prompt(str(data)), "raw_data": data}
+
+
+    return {"instruction": build_prompt(str(data)), "raw_data": data}
 
 @mcp.tool()
 def list_expenses_by_column_name(column_name, item):
@@ -101,19 +121,7 @@ def delete_expense(expense_id):
     query("DELETE FROM expenses WHERE id = ?", [expense_id])
     return {"status": "ok", "deleted_id": expense_id}
 
-@mcp.prompt()
-def system_prompt(problem: str):
-    return f"""
-        You are an expert financial data analyst.
-        Solve the problem step by step:
-        {problem}
-        Give:
-        1. A clear and concise explanation of spending till now
-        2. If you find any duplicated transaction, highlight it bold and give the id
-        3. If you find any transaction with missing category, highlight it bold
-        4. Show the data in red colour where amount is greater than 10000
-        5. Show the data in a basic tabular format.
-    """
+
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="0.0.0.0", port=8000)
