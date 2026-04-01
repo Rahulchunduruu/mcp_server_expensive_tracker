@@ -2,7 +2,7 @@ from fastmcp import FastMCP
 import os
 import sqlite3
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
+DB_PATH = os.environ.get("EXPENSE_DB_PATH", "/tmp/expenses.db")
 CATEGORIES_PATH = os.path.join(os.path.dirname(__file__), "categories.json")
 
 mcp = FastMCP("ExpenseTracker")
@@ -35,6 +35,7 @@ def add_expense(date, amount, category, subcategory="", note=""):
 @mcp.tool()
 def list_expenses(start_date, end_date):
     '''List expense entries within an inclusive date range.'''
+
     with sqlite3.connect(DB_PATH) as c:
         cur = c.execute(
             """
@@ -58,14 +59,17 @@ def list_expenses(start_date, end_date):
 @mcp.tool()
 def list_expenses_by_column_name(column_name, item):
     '''List expense entries within an inclusive date range, grouped by category.'''
+    allowed_columns = {"id", "date", "amount", "category", "subcategory", "note"}
+    if column_name not in allowed_columns:
+        return {"error": f"Invalid column name: {column_name}"}
     with sqlite3.connect(DB_PATH) as c:
         cur = c.execute(
             """
             SELECT id, date, amount, subcategory, note, category
             FROM expenses
-            WHERE ? = ?
+            WHERE {column_name} = ?
             """,
-            (column_name, item)
+            (item,)
         )
         cols = [d[0] for d in cur.description]
         data= [dict(zip(cols, r)) for r in cur.fetchall()]
@@ -115,20 +119,18 @@ def categories():
         return f.read()
 
 @mcp.prompt()
-def system_prompt(problem: str) -> str:
+def system_prompt(problem: str):
     return f"""
-        You are an expert finanical data.
-
+        You are an expert financial data analyst.
         Solve the problem step by step:
         {problem}
-
         Give:
-        1. A clear and concise explanation what are spending till now 
-        2.if you find any duplicated transaction hlight with that one bold and also give the id of that transaction
-        3. If you find any transaction with missing category, highlight with that one bold and
-        4.show the data in the "red colour" where  amount is greater than  10000
-        5.Show the data in a basic "tabular format".
+        1. A clear and concise explanation of spending till now
+        2. If you find any duplicated transaction, highlight it bold and give the id
+        3. If you find any transaction with missing category, highlight it bold
+        4. Show the data in red colour where amount is greater than 10000
+        5. Show the data in a basic tabular format.
         """
 
 if __name__ == "__main__":
-        mcp.run(transport="http", host="0.0.0.0", port=8000)
+    mcp.run(transport="http", host="0.0.0.0", port=8000)
