@@ -2,7 +2,7 @@ from fastmcp import FastMCP
 import os
 import requests
 
-TURSO_URL   = os.environ.get("TURSO_DB_URL", "")      # https://your-db.turso.io
+TURSO_URL   = os.environ.get("TURSO_DB_URL", "")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "")
 
 mcp = FastMCP("ExpenseTracker")
@@ -31,6 +31,12 @@ def query(sql, params=None):
     response.raise_for_status()
     return response.json()["results"][0]["response"]["result"]
 
+# ── Helper: parse Turso rows ───────────────────────────
+def parse_rows(result):
+    cols = [c["name"] for c in result["cols"]]
+    # ✅ rows are plain lists, NOT dicts with "values" key
+    return [dict(zip(cols, [v["value"] for v in row])) for row in result["rows"]]
+
 # ── Init table ─────────────────────────────────────────
 def init_db():
     query("""
@@ -46,9 +52,7 @@ def init_db():
 
 init_db()
 
-# ── Tools ──────────────────────────────────────────────
-
-# ✅ Plain helper function — no decorator
+# ── Prompt helper ──────────────────────────────────────
 def build_prompt(problem: str):
     return f"""
         You are an expert financial data analyst.
@@ -66,6 +70,8 @@ def build_prompt(problem: str):
 def system_prompt(problem: str):
     return build_prompt(problem)
 
+# ── Tools ──────────────────────────────────────────────
+
 @mcp.tool()
 def add_expense(date, amount, category, subcategory="", note=""):
     '''Add a new expense entry to the database.'''
@@ -82,10 +88,7 @@ def list_expenses(start_date, end_date):
         "SELECT id, date, amount, category, subcategory, note FROM expenses WHERE date BETWEEN ? AND ? ORDER BY id ASC",
         [start_date, end_date]
     )
-    cols = [c["name"] for c in result["cols"]]
-    data = [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
-
-
+    data = parse_rows(result)  # ✅ fixed
     return {"instruction": build_prompt(str(data)), "raw_data": data}
 
 @mcp.tool()
@@ -98,9 +101,8 @@ def list_expenses_by_column_name(column_name, item):
         f"SELECT id, date, amount, subcategory, note, category FROM expenses WHERE {column_name} = ?",
         [item]
     )
-    cols = [c["name"] for c in result["cols"]]
-    data = [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
-    return {"instruction": system_prompt(str(data)), "raw_data": data}
+    data = parse_rows(result)  # ✅ fixed
+    return {"instruction": build_prompt(str(data)), "raw_data": data}  # ✅ build_prompt not system_prompt
 
 @mcp.tool()
 def summarize(start_date, end_date, category=None):
@@ -112,16 +114,13 @@ def summarize(start_date, end_date, category=None):
         params.append(category)
     sql += " GROUP BY category ORDER BY category ASC"
     result = query(sql, params)
-    cols = [c["name"] for c in result["cols"]]
-    return [dict(zip(cols, [v["value"] for v in row["values"]])) for row in result["rows"]]
+    return parse_rows(result)  # ✅ fixed
 
 @mcp.tool()
 def delete_expense(expense_id):
     '''Delete an expense entry by ID.'''
     query("DELETE FROM expenses WHERE id = ?", [expense_id])
     return {"status": "ok", "deleted_id": expense_id}
-
-
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="0.0.0.0", port=8000)
