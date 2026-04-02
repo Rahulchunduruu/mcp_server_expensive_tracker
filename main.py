@@ -117,10 +117,17 @@ def summarize(start_date, end_date, category=None):
     return parse_rows(result)  # ✅ fixed
 
 @mcp.tool()
-def delete_expense(expense_id):
+def delete_expense(expense_id: int):
     '''Delete an expense entry by ID.'''
     query("DELETE FROM expenses WHERE id = ?", [expense_id])
     return {"status": "ok", "deleted_id": expense_id}
+
+@mcp.tool()
+def delete_expense_list(expense_ids: list):
+    '''Delete multiple expense entries by IDs.'''
+    placeholders = ','.join('?' * len(expense_ids))
+    query(f"DELETE FROM expenses WHERE id IN ({placeholders})", expense_ids)
+    return {"status": "ok", "deleted_ids": expense_ids}
 
 if __name__ == "__main__":
     mcp.run(transport="http", host="0.0.0.0", port=8000)
