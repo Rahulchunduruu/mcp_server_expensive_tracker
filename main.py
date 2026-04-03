@@ -65,7 +65,7 @@ def build_prompt(problem: str):
         3. If you find any transaction with missing category, highlight it bold
         4. Show the data in red colour where amount is greater than 10000
         5. Show the data in a basic tabular format.
-        6. If i didn't mentioned mode of payment then assume it is credit card else it debit card or cash.
+        6. If i didn't mentioned mode of payment_method then assume it is credit card else it debit card or cash.
         7.if i didn't mentioned subcategory then assume it is general.
     """
 
