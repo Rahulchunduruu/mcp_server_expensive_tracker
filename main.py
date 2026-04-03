@@ -76,7 +76,7 @@ def system_prompt(problem: str):
 # ── Tools ──────────────────────────────────────────────
 
 @mcp.tool()
-def add_expense(date, amount, category, subcategory, note="", payment_method):
+def add_expense(date, amount, category, subcategory, payment_method, note=""):
 
     '''Add a new expense entry to the database.'''
     result = query(
