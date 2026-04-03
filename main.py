@@ -46,7 +46,7 @@ def init_db():
             amount REAL NOT NULL,
             category TEXT NOT NULL,
             subcategory TEXT NOT NULL DEFAULT 'general',
-            payment_method TEXT NOT NULL,
+            payment_method TEXT NOT NULL DEFAULT 'credit card',
             note TEXT DEFAULT ''
         )
     """)
