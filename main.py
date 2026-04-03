@@ -46,6 +46,7 @@ def init_db():
             amount REAL NOT NULL,
             category TEXT NOT NULL,
             subcategory TEXT DEFAULT '',
+            payment_method TEXT DEFAULT '',
             note TEXT DEFAULT ''
         )
     """)
@@ -64,6 +65,7 @@ def build_prompt(problem: str):
         3. If you find any transaction with missing category, highlight it bold
         4. Show the data in red colour where amount is greater than 10000
         5. Show the data in a basic tabular format.
+        6. If i didn't mentioned mode of payment then assume it is credit card and if i didn't mentioned subcategory then assume it is general or debit card.
     """
 
 @mcp.prompt()
@@ -73,11 +75,12 @@ def system_prompt(problem: str):
 # ── Tools ──────────────────────────────────────────────
 
 @mcp.tool()
-def add_expense(date, amount, category, subcategory="", note=""):
+def add_expense(date, amount, category, subcategory="", note="", payment_method=""):
+
     '''Add a new expense entry to the database.'''
     result = query(
-        "INSERT INTO expenses(date, amount, category, subcategory, note) VALUES (?,?,?,?,?)",
-        [date, amount, category, subcategory, note]
+        "INSERT INTO expenses(date, amount, category, subcategory, note, payment_method) VALUES (?,?,?,?,?,?)",
+        [date, amount, category, subcategory, note, payment_method]
     )
     return {"status": "ok", "id": result["last_insert_rowid"]}
 
@@ -85,23 +88,23 @@ def add_expense(date, amount, category, subcategory="", note=""):
 def list_expenses(start_date, end_date):
     '''List expense entries within an inclusive date range.'''
     result = query(
-        "SELECT id, date, amount, category, subcategory, note FROM expenses WHERE date BETWEEN ? AND ? ORDER BY id ASC",
+        "SELECT id, date, amount, category, subcategory, note, payment_method FROM expenses WHERE date BETWEEN ? AND ? ORDER BY id ASC",
         [start_date, end_date]
     )
-    data = parse_rows(result)  # ✅ fixed
+    data = parse_rows(result)  
     return {"instruction": build_prompt(str(data)), "raw_data": data}
 
 @mcp.tool()
 def list_expenses_by_column_name(column_name, item):
     '''List expense entries filtered by a column value.'''
-    allowed = {"id", "date", "amount", "category", "subcategory", "note"}
+    allowed = {"id", "date", "amount", "category", "subcategory", "note", "payment_method"}
     if column_name not in allowed:
         return {"error": f"Invalid column: {column_name}"}
     result = query(
-        f"SELECT id, date, amount, subcategory, note, category FROM expenses WHERE {column_name} = ?",
+        f"SELECT id, date, amount, subcategory, note, category, payment_method FROM expenses WHERE {column_name} = ?",
         [item]
     )
-    data = parse_rows(result)  # ✅ fixed
+    data = parse_rows(result)  
     return {"instruction": build_prompt(str(data)), "raw_data": data}  # ✅ build_prompt not system_prompt
 
 @mcp.tool()
@@ -114,10 +117,10 @@ def summarize(start_date, end_date, category=None):
         params.append(category)
     sql += " GROUP BY category ORDER BY category ASC"
     result = query(sql, params)
-    return parse_rows(result)  # ✅ fixed
+    return parse_rows(result)  
 
 @mcp.tool()
-def delete_expense(expense_id: int):
+def delete_expense(expense_id: str):
     '''Delete an expense entry by ID.'''
     query("DELETE FROM expenses WHERE id = ?", [expense_id])
     return {"status": "ok", "deleted_id": expense_id}
